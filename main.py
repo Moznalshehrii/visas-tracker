@@ -23,19 +23,19 @@ st.markdown("""
     .main-header {
         font-size: 2.2rem;
         font-weight: 700;
-        background: linear-gradient(90deg, #1e3a5f, #4a90d9);
+        background: linear-gradient(90deg, #86BC25, #6240A8);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0;
     }
     .sub-header {
         font-size: 1rem;
-        color: #6c757d;
+        color: #a0aec0;
         margin-top: -10px;
         margin-bottom: 20px;
     }
     .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #86BC25 0%, #6240A8 100%);
         padding: 20px;
         border-radius: 12px;
         color: white;
