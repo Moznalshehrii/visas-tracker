@@ -58,8 +58,9 @@ st.markdown("""
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-GROQ_API_KEY = os.getenv("GROQ_API_KEY") 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CHART_TYPES = ["Bar", "Pie", "Donut", "Line", "Area", "Treemap", "Sunburst", "Funnel", "Scatter", "Histogram", "Heatmap"]
+NAGARRO_COLORS = ["#5CE0B8", "#1B1F3B", "#C4C4CC", "#8B7EB8", "#3D6B6B", "#A8E6CF"]
 COLOR_SCALES = {
     "Nagarro": NAGARRO_COLORS,
     "Viridis": px.colors.sequential.Viridis,
@@ -77,8 +78,6 @@ COLOR_SCALES = {
     "Earth": px.colors.sequential.Brwnyl,
     "Ice": px.colors.sequential.ice,
 }
-
-NAGARRO_COLORS = ["#5CE0B8", "#1B1F3B", "#C4C4CC", "#8B7EB8", "#3D6B6B", "#A8E6CF"]
 
 
 # ---------------------------------------------------------------------------
