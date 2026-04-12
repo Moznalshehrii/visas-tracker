@@ -27,22 +27,12 @@ st.markdown("""
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CHART_TYPES = ["Bar", "Pie", "Donut", "Line", "Area", "Treemap", "Sunburst", "Funnel", "Scatter", "Histogram", "Heatmap"]
-NAGARRO_COLORS = ["#5CE0B8", "#1B1F3B", "#C4C4CC", "#8B7EB8", "#3D6B6B", "#A8E6CF"]
-COLOR_SCALES = {
-    "Nagarro": NAGARRO_COLORS,
-    "Viridis": px.colors.sequential.Viridis, "Plasma": px.colors.sequential.Plasma,
-    "Inferno": px.colors.sequential.Inferno, "Magma": px.colors.sequential.Magma,
-    "Cividis": px.colors.sequential.Cividis, "Turbo": px.colors.sequential.Turbo,
-    "Rainbow": px.colors.qualitative.Set3, "Bold": px.colors.qualitative.Bold,
-    "Pastel": px.colors.qualitative.Pastel, "Sunset": px.colors.sequential.Sunset,
-    "Teal": px.colors.sequential.Teal, "Berry": px.colors.sequential.Magenta,
-    "Earth": px.colors.sequential.Brwnyl, "Ice": px.colors.sequential.ice,
-}
+NAGARRO_COLORS = ["#46d7ab", "#2e008b", "#c3c9d2", "#8B7EB8", "#3D6B6B", "#A8E6CF"]
 
 # Timeline Oct 2025 – Dec 2026
 TIMELINE = [(2025, m) for m in range(10, 13)] + [(2026, m) for m in range(1, 13)]
 TIMELINE_LABELS = [f"{calendar.month_abbr[m].upper()} {y}" for y, m in TIMELINE]
-LINE_COLORS = {"Business": "#5CE0B8", "Temporary": "#1B1F3B", "Permanent": "#C4C4CC"}
+LINE_COLORS = {"Business": "#46d7ab", "Temporary": "#2e008b", "Permanent": "#c3c9d2"}
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +170,7 @@ def make_chart(df, x, y, chart_type, color_scale, height, title=""):
     return fig
 
 
-def make_expense_line(records, title, height, color="#5CE0B8"):
+def make_expense_line(records, title, height, color="#46d7ab"):
     """Build a line chart from a list of {Year, Month_Num, Cost} records over TIMELINE."""
     df = pd.DataFrame(records) if records else pd.DataFrame(columns=["Year", "Month_Num", "Cost"])
     costs = []
@@ -204,7 +194,7 @@ def make_expense_line(records, title, height, color="#5CE0B8"):
 
 def make_multi_expense_line(series_dict, title, height):
     """series_dict: {name: [{Year, Month_Num, Cost}]}"""
-    colors = ["#5CE0B8", "#1B1F3B", "#C4C4CC", "#8B7EB8"]
+    colors = ["#46d7ab", "#2e008b", "#c3c9d2", "#8B7EB8"]
     fig = go.Figure()
     for i, (name, records) in enumerate(series_dict.items()):
         df = pd.DataFrame(records) if records else pd.DataFrame(columns=["Year", "Month_Num", "Cost"])
@@ -227,17 +217,26 @@ def make_multi_expense_line(series_dict, title, height):
 # ---------------------------------------------------------------------------
 # Expense helpers — extract cost records per visa type
 # ---------------------------------------------------------------------------
+def _safe_num(val):
+    """Convert value to float; return 0 for anything non-numeric."""
+    v = pd.to_numeric(val, errors="coerce")
+    return 0.0 if pd.isna(v) else float(v)
+
+
 def get_bv_expenses(df):
     """Business Visit: total = COC fee per visa, date = issuance date."""
     date_col = find_col(df, "issuance", "date")
     cost_col = find_col(df, "cost", "fee")
     records = []
-    if date_col and cost_col:
+    if cost_col:
         for _, row in df.iterrows():
-            d = pd.to_datetime(row[date_col], errors="coerce")
-            c = pd.to_numeric(row[cost_col], errors="coerce")
-            if pd.notna(d) and pd.notna(c):
-                records.append({"Year": d.year, "Month_Num": d.month, "Cost": c})
+            d = pd.to_datetime(row.get(date_col), errors="coerce") if date_col else pd.NaT
+            c = _safe_num(row.get(cost_col, 0))
+            if c > 0:
+                if pd.isna(d):
+                    records.append({"Year": 2026, "Month_Num": 1, "Cost": c})
+                else:
+                    records.append({"Year": d.year, "Month_Num": d.month, "Cost": c})
     return records
 
 
@@ -249,20 +248,22 @@ def get_tw_expenses(df):
     records = []
     for _, row in df.iterrows():
         d = pd.to_datetime(row.get(date_col), errors="coerce") if date_col else pd.NaT
-        if pd.isna(d):
-            continue
         if total_col:
-            cost = pd.to_numeric(row[total_col], errors="coerce")
+            cost = _safe_num(row[total_col])
         else:
-            cost = sum(pd.to_numeric(row.get(fc, 0), errors="coerce") or 0 for fc in fee_cols)
-        if pd.notna(cost) and cost > 0:
-            records.append({"Year": d.year, "Month_Num": d.month, "Cost": cost})
+            cost = sum(_safe_num(row.get(fc, 0)) for fc in fee_cols)
+        if cost > 0:
+            if pd.isna(d):
+                records.append({"Year": 2026, "Month_Num": 1, "Cost": cost})
+            else:
+                records.append({"Year": d.year, "Month_Num": d.month, "Cost": cost})
     return records
 
 
 def get_pw_expenses(df):
     """Permanent Work: returns (before_arrival, after_arrival, total) record lists."""
-    date_col = find_col(df, "visa issue")
+    # Try multiple date column fallbacks
+    date_col = find_col(df, "visa issue") or find_col(df, "issue date") or find_col(df, "date")
     before_keys = ["moi fee", "coc fee", "mofa fee", "document shipping"]
     after_keys = ["medical", "work permit", "sce", "iqama", "health insurance"]
     before_cols = [c for c in df.columns if any(k in c.lower() for k in before_keys)]
@@ -272,14 +273,16 @@ def get_pw_expenses(df):
     before_records, after_records, total_records = [], [], []
     for _, row in df.iterrows():
         d = pd.to_datetime(row.get(date_col), errors="coerce") if date_col else pd.NaT
+        # Default undated rows to Jan 2026 so they still get counted
         if pd.isna(d):
-            continue
-        ym = {"Year": d.year, "Month_Num": d.month}
-        b = sum(pd.to_numeric(row.get(c, 0), errors="coerce") or 0 for c in before_cols)
-        a = sum(pd.to_numeric(row.get(c, 0), errors="coerce") or 0 for c in after_cols)
+            ym = {"Year": 2026, "Month_Num": 1}
+        else:
+            ym = {"Year": d.year, "Month_Num": d.month}
+        b = sum(_safe_num(row.get(c, 0)) for c in before_cols)
+        a = sum(_safe_num(row.get(c, 0)) for c in after_cols)
         if total_col:
-            t = pd.to_numeric(row[total_col], errors="coerce")
-            if pd.isna(t):
+            t = _safe_num(row[total_col])
+            if t == 0:
                 t = b + a
         else:
             t = b + a
@@ -337,8 +340,7 @@ with st.sidebar:
     st.divider()
     st.markdown("### Chart Preferences")
     default_chart = st.selectbox("Default chart type", CHART_TYPES, index=0)
-    default_color_name = st.selectbox("Color palette", list(COLOR_SCALES.keys()), index=0)
-    default_color = COLOR_SCALES[default_color_name]
+    default_color = NAGARRO_COLORS
     chart_height = st.slider("Chart height (px)", 300, 800, 450, step=50)
     st.divider()
     st.caption("Built with Streamlit, Plotly & Groq AI")
@@ -420,14 +422,12 @@ tabs = st.tabs(["Overview", "Business Visit", "Temporary Work", "Permanent Work"
 # ===== TAB 0 : OVERVIEW ====================================================
 with tabs[0]:
     st.subheader("2026 Overview Dashboard")
-    oc1, oc2, oc3 = st.columns(3)
+    oc1, oc2 = st.columns(2)
     with oc1:
         ov_chart = st.selectbox("Chart type", CHART_TYPES, index=0, key="ov_chart")
     with oc2:
-        ov_cn = st.selectbox("Color", list(COLOR_SCALES.keys()), index=0, key="ov_color")
-        ov_color = COLOR_SCALES[ov_cn]
-    with oc3:
         ov_h = st.slider("Height", 300, 800, chart_height, 50, key="ov_h")
+    ov_color = NAGARRO_COLORS
 
     # Summary metrics
     st.markdown("#### Summary")
@@ -574,14 +574,12 @@ Format it nicely with markdown headers, bullet points, and bold key numbers."""
 with tabs[1]:
     if bv is not None:
         st.subheader("Business Visit Visa 2026")
-        bc1, bc2, bc3 = st.columns(3)
+        bc1, bc2 = st.columns(2)
         with bc1:
             bv_chart = st.selectbox("Chart type", CHART_TYPES, index=0, key="bv_ct")
         with bc2:
-            bv_cn = st.selectbox("Color", list(COLOR_SCALES.keys()), index=0, key="bv_cl")
-            bv_c = COLOR_SCALES[bv_cn]
-        with bc3:
             bv_h = st.slider("Height", 300, 800, chart_height, 50, key="bv_h")
+        bv_c = NAGARRO_COLORS
 
         st.dataframe(bv, use_container_width=True, height=300)
 
@@ -614,7 +612,7 @@ with tabs[1]:
         st.markdown("#### Total Expenses (COC Fee)")
         bv_total_cost = sum(r["Cost"] for r in bv_exp)
         st.metric("Total Business Visit Cost", f"{bv_total_cost:,.0f} SAR")
-        fig = make_expense_line(bv_exp, "Business Visit Monthly Expenses", bv_h, "#5CE0B8")
+        fig = make_expense_line(bv_exp, "Business Visit Monthly Expenses", bv_h, "#46d7ab")
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("Business Visit Visa 2026 sheet not found.")
@@ -624,14 +622,12 @@ with tabs[1]:
 with tabs[2]:
     if tw is not None:
         st.subheader("Temporary Work Visa 2026")
-        tc1, tc2, tc3 = st.columns(3)
+        tc1, tc2 = st.columns(2)
         with tc1:
             tw_chart = st.selectbox("Chart type", CHART_TYPES, index=0, key="tw_ct")
         with tc2:
-            tw_cn = st.selectbox("Color", list(COLOR_SCALES.keys()), index=0, key="tw_cl")
-            tw_c = COLOR_SCALES[tw_cn]
-        with tc3:
             tw_h = st.slider("Height", 300, 800, chart_height, 50, key="tw_h")
+        tw_c = NAGARRO_COLORS
 
         st.dataframe(tw, use_container_width=True, height=300)
 
@@ -660,7 +656,7 @@ with tabs[2]:
         st.markdown("#### Total Expenses")
         tw_total_cost = sum(r["Cost"] for r in tw_exp)
         st.metric("Total Temporary Work Cost", f"{tw_total_cost:,.0f} SAR")
-        fig = make_expense_line(tw_exp, "Temporary Work Monthly Expenses", tw_h, "#5CE0B8")
+        fig = make_expense_line(tw_exp, "Temporary Work Monthly Expenses", tw_h, "#2e008b")
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("Temporary Work Visa 2026 sheet not found.")
@@ -670,14 +666,12 @@ with tabs[2]:
 with tabs[3]:
     if pw is not None:
         st.subheader("Permanent Work Visa 2026")
-        pc1, pc2, pc3 = st.columns(3)
+        pc1, pc2 = st.columns(2)
         with pc1:
             pw_chart = st.selectbox("Chart type", CHART_TYPES, index=0, key="pw_ct")
         with pc2:
-            pw_cn = st.selectbox("Color", list(COLOR_SCALES.keys()), index=0, key="pw_cl")
-            pw_c = COLOR_SCALES[pw_cn]
-        with pc3:
             pw_h = st.slider("Height", 300, 800, chart_height, 50, key="pw_h")
+        pw_c = NAGARRO_COLORS
 
         st.dataframe(pw, use_container_width=True, height=300)
 
@@ -721,13 +715,13 @@ with tabs[3]:
 
         pe1, pe2 = st.columns(2)
         with pe1:
-            fig = make_expense_line(pw_before, "Before Arrival to KSA (Monthly)", pw_h, "#5CE0B8")
+            fig = make_expense_line(pw_before, "Before Arrival to KSA (Monthly)", pw_h, "#46d7ab")
             st.plotly_chart(fig, use_container_width=True)
         with pe2:
-            fig = make_expense_line(pw_after, "After Arrival in KSA (Monthly)", pw_h, "#1B1F3B")
+            fig = make_expense_line(pw_after, "After Arrival in KSA (Monthly)", pw_h, "#2e008b")
             st.plotly_chart(fig, use_container_width=True)
 
-        fig = make_expense_line(pw_total, "Total Permanent Work Expenses (Monthly)", pw_h, "#8B7EB8")
+        fig = make_expense_line(pw_total, "Total Permanent Work Expenses (Monthly)", pw_h, "#c3c9d2")
         st.plotly_chart(fig, use_container_width=True)
 
         # All 3 on one chart
@@ -759,6 +753,55 @@ with tabs[4]:
         st.metric("Permanent Work", f"{total_pw:,.0f} SAR")
     with e4:
         st.markdown(f'<div class="metric-card"><h3>{grand_total:,.0f}</h3><p>Total Spent (SAR)</p></div>', unsafe_allow_html=True)
+
+    # Permanent Work breakdown: Before / After Arrival (totals)
+    pw_before_sum = sum(r["Cost"] for r in pw_before)
+    pw_after_sum = sum(r["Cost"] for r in pw_after)
+    st.markdown("##### Permanent Work Breakdown")
+    ba1, ba2 = st.columns(2)
+    with ba1:
+        st.metric("Before Arrival to KSA", f"{pw_before_sum:,.0f} SAR")
+    with ba2:
+        st.metric("After Arrival in KSA", f"{pw_after_sum:,.0f} SAR")
+
+    # Month selector for Before / After Arrival
+    st.markdown("##### Monthly Before & After Arrival Lookup")
+    ba_month = st.selectbox("Select a month", TIMELINE_LABELS, index=len(TIMELINE_LABELS) - 1, key="exp_ba_month_sel")
+    ba_idx = TIMELINE_LABELS.index(ba_month)
+    ba_y, ba_m = TIMELINE[ba_idx]
+    before_sel = sum(r["Cost"] for r in pw_before if r["Year"] == ba_y and r["Month_Num"] == ba_m)
+    after_sel = sum(r["Cost"] for r in pw_after if r["Year"] == ba_y and r["Month_Num"] == ba_m)
+    ba_total_sel = before_sel + after_sel
+
+    ba3, ba4, ba5 = st.columns(3)
+    with ba3:
+        st.metric(f"Before Arrival ({ba_month})", f"{before_sel:,.0f} SAR")
+    with ba4:
+        st.metric(f"After Arrival ({ba_month})", f"{after_sel:,.0f} SAR")
+    with ba5:
+        st.metric(f"PW Total ({ba_month})", f"{ba_total_sel:,.0f} SAR")
+    st.markdown("---")
+
+    # Month selector — written totals (all visa types)
+    st.markdown("#### Monthly Expense Lookup")
+    sel_month = st.selectbox("Select a month", TIMELINE_LABELS, index=len(TIMELINE_LABELS) - 1, key="exp_month_sel")
+    sel_idx = TIMELINE_LABELS.index(sel_month)
+    sel_y, sel_m = TIMELINE[sel_idx]
+    bv_sel = sum(r["Cost"] for r in bv_exp if r["Year"] == sel_y and r["Month_Num"] == sel_m)
+    tw_sel = sum(r["Cost"] for r in tw_exp if r["Year"] == sel_y and r["Month_Num"] == sel_m)
+    pw_sel = sum(r["Cost"] for r in pw_total if r["Year"] == sel_y and r["Month_Num"] == sel_m)
+    total_sel = bv_sel + tw_sel + pw_sel
+
+    ms1, ms2, ms3, ms4 = st.columns(4)
+    with ms1:
+        st.metric("Business Visit", f"{bv_sel:,.0f} SAR")
+    with ms2:
+        st.metric("Temporary Work", f"{tw_sel:,.0f} SAR")
+    with ms3:
+        st.metric("Permanent Work", f"{pw_sel:,.0f} SAR")
+    with ms4:
+        st.markdown(f'<div class="metric-card"><h3>{total_sel:,.0f}</h3><p>Total for {sel_month} (SAR)</p></div>', unsafe_allow_html=True)
+
     st.markdown("---")
 
     # Combined monthly line chart — all types + total
@@ -773,13 +816,13 @@ with tabs[4]:
     st.markdown("#### Individual Visa Type Expenses")
     ie1, ie2, ie3 = st.columns(3)
     with ie1:
-        fig = make_expense_line(bv_exp, "Business Visit", 400, "#5CE0B8")
+        fig = make_expense_line(bv_exp, "Business Visit", 400, "#46d7ab")
         st.plotly_chart(fig, use_container_width=True)
     with ie2:
-        fig = make_expense_line(tw_exp, "Temporary Work", 400, "#1B1F3B")
+        fig = make_expense_line(tw_exp, "Temporary Work", 400, "#2e008b")
         st.plotly_chart(fig, use_container_width=True)
     with ie3:
-        fig = make_expense_line(pw_total, "Permanent Work", 400, "#C4C4CC")
+        fig = make_expense_line(pw_total, "Permanent Work", 400, "#c3c9d2")
         st.plotly_chart(fig, use_container_width=True)
 
     # Monthly total table
