@@ -6,7 +6,17 @@ from groq import Groq
 from dotenv import load_dotenv
 import os
 import io
+import re
 import calendar
+from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.lib.colors import HexColor
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, Table, TableStyle,
+)
 
 load_dotenv()
 
@@ -296,6 +306,136 @@ def get_pw_expenses(df):
 
 
 # ---------------------------------------------------------------------------
+# PDF Summary Report Builder
+# ---------------------------------------------------------------------------
+NAGARRO_TEAL = HexColor("#46d7ab")
+NAGARRO_NAVY = HexColor("#2e008b")
+NAGARRO_GREY = HexColor("#4a4a4a")
+
+
+def _md_to_rl(text):
+    """Convert a single line of markdown inline formatting to ReportLab markup."""
+    # Escape ampersands and angle brackets that aren't part of our tags
+    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # **bold**
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    # *italic* or _italic_
+    text = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<i>\1</i>", text)
+    text = re.sub(r"_(.+?)_", r"<i>\1</i>", text)
+    # `code` → just bold-ish
+    text = re.sub(r"`(.+?)`", r"<font face='Courier'>\1</font>", text)
+    return text
+
+
+def build_pdf_summary(report_md, metrics, chart_figs, logo_path=None):
+    """
+    Build a PDF summary report.
+      report_md : AI-generated markdown text
+      metrics   : dict of summary key→value pairs (strings)
+      chart_figs: list of (title, plotly.Figure) tuples to embed
+      logo_path : optional path to logo image
+    Returns: PDF bytes
+    """
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=1.8 * cm, rightMargin=1.8 * cm,
+        topMargin=1.8 * cm, bottomMargin=1.8 * cm,
+        title="Visas Tracker 2026 — Summary Report",
+    )
+
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("H1", parent=styles["Heading1"], fontSize=20, textColor=NAGARRO_NAVY,
+                        spaceAfter=8, alignment=TA_LEFT)
+    h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontSize=14, textColor=NAGARRO_NAVY,
+                        spaceBefore=14, spaceAfter=6)
+    h3 = ParagraphStyle("H3", parent=styles["Heading3"], fontSize=12, textColor=NAGARRO_GREY,
+                        spaceBefore=10, spaceAfter=4)
+    body = ParagraphStyle("Body", parent=styles["BodyText"], fontSize=10.5, leading=15,
+                          textColor=HexColor("#222222"), spaceAfter=6)
+    bullet = ParagraphStyle("Bullet", parent=body, leftIndent=16, bulletIndent=6, spaceAfter=3)
+    subtitle = ParagraphStyle("Sub", parent=body, fontSize=9, textColor=NAGARRO_GREY)
+
+    story = []
+
+    # --- Header with logo ---
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo = Image(logo_path, width=3 * cm, height=3 * cm, kind="proportional")
+            story.append(logo)
+        except Exception:
+            pass
+
+    story.append(Paragraph("Visas Tracker 2026", h1))
+    story.append(Paragraph("Executive Summary Report", h3))
+    story.append(Paragraph(
+        f"Generated {datetime.now().strftime('%B %d, %Y at %H:%M')}", subtitle))
+    story.append(Spacer(1, 0.4 * cm))
+
+    # --- Key Metrics table ---
+    if metrics:
+        story.append(Paragraph("Key Metrics", h2))
+        rows = [[Paragraph(f"<b>{k}</b>", body), Paragraph(str(v), body)] for k, v in metrics.items()]
+        tbl = Table(rows, colWidths=[6 * cm, 10 * cm])
+        tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, -1), HexColor("#f2f6f5")),
+            ("BOX", (0, 0), (-1, -1), 0.5, NAGARRO_GREY),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, HexColor("#cccccc")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(tbl)
+        story.append(Spacer(1, 0.4 * cm))
+
+    # --- AI Report body (markdown → ReportLab) ---
+    for raw in (report_md or "").splitlines():
+        line = raw.rstrip()
+        if not line.strip():
+            story.append(Spacer(1, 0.15 * cm))
+            continue
+        if line.startswith("### "):
+            story.append(Paragraph(_md_to_rl(line[4:]), h3))
+        elif line.startswith("## "):
+            story.append(Paragraph(_md_to_rl(line[3:]), h2))
+        elif line.startswith("# "):
+            story.append(Paragraph(_md_to_rl(line[2:]), h1))
+        elif line.lstrip().startswith(("- ", "* ")):
+            item = line.lstrip()[2:]
+            story.append(Paragraph(_md_to_rl(item), bullet, bulletText="•"))
+        elif re.match(r"^\s*\d+\.\s+", line):
+            item = re.sub(r"^\s*\d+\.\s+", "", line)
+            story.append(Paragraph(_md_to_rl(item), bullet, bulletText="•"))
+        else:
+            story.append(Paragraph(_md_to_rl(line), body))
+
+    # --- Charts (ALWAYS embedded — never silently skipped) ---
+    if chart_figs:
+        story.append(PageBreak())
+        story.append(Paragraph("Dashboard Charts", h2))
+        story.append(Paragraph(
+            f"The following {len(chart_figs)} charts from the Overview dashboard are included.", subtitle))
+        story.append(Spacer(1, 0.3 * cm))
+
+        for i, (name, fig) in enumerate(chart_figs):
+            # Render chart to high-DPI PNG. If this fails, surface the error
+            # loudly — do NOT silently skip (the user explicitly wants charts).
+            png = fig.to_image(format="png", width=1400, height=700, scale=2)
+            story.append(Paragraph(f"<b>{i + 1}. {name}</b>", h3))
+            img = Image(io.BytesIO(png), width=17 * cm, height=8.5 * cm, kind="proportional")
+            story.append(img)
+            story.append(Spacer(1, 0.5 * cm))
+            # Force page break between every 2 charts so they stay readable
+            if (i + 1) % 2 == 0 and i < len(chart_figs) - 1:
+                story.append(PageBreak())
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
 # Groq Chat
 # ---------------------------------------------------------------------------
 def ask_groq(question, data_context):
@@ -505,9 +645,9 @@ with tabs[0]:
 
     st.markdown("---")
 
-    # Print Summary Report button
-    if st.button("Print Summary Report", type="primary", use_container_width=True, key="print_report"):
-        with st.spinner("Generating AI summary report..."):
+    # Print Summary — generates a downloadable PDF
+    if st.button("Print Summary", type="primary", use_container_width=True, key="print_report"):
+        with st.spinner("Generating summary report..."):
             # Build summary data for the AI
             total_bv_cost = sum(r["Cost"] for r in bv_exp)
             total_tw_cost = sum(r["Cost"] for r in tw_exp)
@@ -554,20 +694,44 @@ Format it nicely with markdown headers, bullet points, and bold key numbers."""
 
             report = ask_groq(report_prompt, "")
 
-        st.markdown("---")
-        st.markdown("## Summary Report")
-        st.markdown(report)
-
-        # Show all overview charts as images
-        st.markdown("---")
-        st.markdown("### Dashboard Charts")
-        for idx, (chart_name, chart_fig) in enumerate(ov_figs):
-            st.markdown(f"**{chart_name}**")
+            # Build the PDF
+            metrics_dict = {
+                "Total Visas": f"{n_total}",
+                "Business Visit": f"{n_bv}",
+                "Temporary Work": f"{n_tw}",
+                "Permanent Work": f"{n_pw}",
+                "Nationalities": f"{n_nationalities}",
+                "Unique Passports": f"{n_passports}",
+                "Total Spent": f"{grand:,.0f} SAR",
+            }
+            logo = os.path.join("assets", "nagarro_logo.png")
             try:
-                img_bytes = chart_fig.to_image(format="png", width=1200, height=500)
-                st.image(img_bytes, use_container_width=True)
-            except Exception:
-                st.plotly_chart(chart_fig, use_container_width=True, key=f"report_chart_{idx}")
+                pdf_bytes = build_pdf_summary(report, metrics_dict, ov_figs, logo_path=logo)
+                st.session_state["summary_pdf"] = pdf_bytes
+                st.session_state["summary_md"] = report
+                st.success(f"Report ready — includes {len(ov_figs)} chart(s). Click the download button below.")
+            except Exception as e:
+                import traceback
+                st.error(f"PDF generation failed: {e}")
+                st.code(traceback.format_exc())
+                st.session_state["summary_pdf"] = None
+                st.session_state["summary_md"] = report
+
+    # Download button + on-screen preview (persists across reruns)
+    if st.session_state.get("summary_pdf"):
+        fname = f"visas_tracker_summary_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        st.download_button(
+            "⬇️ Download Summary PDF",
+            data=st.session_state["summary_pdf"],
+            file_name=fname,
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True,
+            key="dl_summary_pdf",
+        )
+        st.markdown("---")
+        st.markdown("## Summary Report Preview")
+        st.markdown(st.session_state.get("summary_md", ""))
 
 
 # ===== TAB 1 : BUSINESS VISIT ==============================================
