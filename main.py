@@ -24,11 +24,11 @@ st.set_page_config(page_title="Visas Tracker 2026", page_icon="🌍", layout="wi
 
 st.markdown("""
 <style>
-    .main-header { font-size: 5rem !important; font-weight: 900 !important; color: #5CE0B8 !important; margin: 0 0 4px 0 !important; line-height: 1.05 !important; letter-spacing: -1px !important; }
-    .sub-header { font-size: 1.1rem !important; color: #a0aec0 !important; margin-top: 0 !important; margin-bottom: 24px !important; }
+    .main-header { font-size: 5rem !important; font-weight: 900 !important; color: #47D7AC !important; margin: 0 0 4px 0 !important; line-height: 1.05 !important; letter-spacing: -1px !important; }
+    .sub-header { font-size: 1.1rem !important; color: #8893A5 !important; margin-top: 0 !important; margin-bottom: 24px !important; }
     .stTabs [data-baseweb="tab-panel"] h2,
     .stTabs [data-baseweb="tab-panel"] [data-testid="stHeadingWithActionElements"] h2 { font-size: 2.4rem !important; font-weight: 800 !important; }
-    .metric-card { background: linear-gradient(135deg, #5CE0B8 0%, #1B1F3B 100%); padding: 20px; border-radius: 12px; color: white; text-align: center; }
+    .metric-card { background: linear-gradient(135deg, #47D7AC 0%, #06041F 100%); padding: 20px; border-radius: 12px; color: white; text-align: center; }
     .metric-card h3 { margin: 0; font-size: 2rem; font-weight: 700; }
     .metric-card p { margin: 5px 0 0 0; font-size: 0.9rem; opacity: 0.85; }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
@@ -39,12 +39,12 @@ st.markdown("""
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CHART_TYPES = ["Bar", "Pie", "Donut", "Line", "Area", "Treemap", "Sunburst", "Funnel", "Scatter", "Histogram", "Heatmap"]
-NAGARRO_COLORS = ["#46d7ab", "#2e008b", "#E69F00", "#56B4E9", "#CC79A7", "#F0E442"]
+NAGARRO_COLORS = ["#47D7AC", "#FBD872", "#F8485E", "#6240A8", "#8893A5", "#75E1C1"]
 
 # Timeline Oct 2025 – Dec 2026
 TIMELINE = [(2025, m) for m in range(10, 13)] + [(2026, m) for m in range(1, 13)]
 TIMELINE_LABELS = [f"{calendar.month_abbr[m].upper()} {y}" for y, m in TIMELINE]
-LINE_COLORS = {"Business": "#46d7ab", "Temporary": "#2e008b", "Permanent": "#E69F00"}
+LINE_COLORS = {"Business": "#47D7AC", "Temporary": "#FBD872", "Permanent": "#F8485E"}
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +188,7 @@ def make_chart(df, x, y, chart_type, color_scale, height, title=""):
     return fig
 
 
-def make_expense_line(records, title, height, color="#46d7ab"):
+def make_expense_line(records, title, height, color="#47D7AC"):
     """Build a line chart from a list of {Year, Month_Num, Cost} records over TIMELINE."""
     df = pd.DataFrame(records) if records else pd.DataFrame(columns=["Year", "Month_Num", "Cost"])
     costs = []
@@ -212,7 +212,7 @@ def make_expense_line(records, title, height, color="#46d7ab"):
 
 def make_multi_expense_line(series_dict, title, height):
     """series_dict: {name: [{Year, Month_Num, Cost}]}"""
-    colors = ["#46d7ab", "#2e008b", "#E69F00", "#56B4E9"]
+    colors = ["#47D7AC", "#FBD872", "#F8485E", "#6240A8"]
     fig = go.Figure()
     for i, (name, records) in enumerate(series_dict.items()):
         df = pd.DataFrame(records) if records else pd.DataFrame(columns=["Year", "Month_Num", "Cost"])
@@ -316,9 +316,9 @@ def get_pw_expenses(df):
 # ---------------------------------------------------------------------------
 # PDF Summary Report Builder
 # ---------------------------------------------------------------------------
-NAGARRO_TEAL = HexColor("#46d7ab")
-NAGARRO_NAVY = HexColor("#2e008b")
-NAGARRO_GREY = HexColor("#4a4a4a")
+NAGARRO_TEAL = HexColor("#47D7AC")
+NAGARRO_NAVY = HexColor("#2E008B")
+NAGARRO_GREY = HexColor("#4E5E78")
 
 
 def _md_to_rl(text):
@@ -386,9 +386,9 @@ def build_pdf_summary(report_md, metrics, chart_figs, logo_path=None):
         rows = [[Paragraph(f"<b>{k}</b>", body), Paragraph(str(v), body)] for k, v in metrics.items()]
         tbl = Table(rows, colWidths=[6 * cm, 10 * cm])
         tbl.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (0, -1), HexColor("#f2f6f5")),
+            ("BACKGROUND", (0, 0), (0, -1), HexColor("#EFF1F4")),
             ("BOX", (0, 0), (-1, -1), 0.5, NAGARRO_GREY),
-            ("INNERGRID", (0, 0), (-1, -1), 0.25, HexColor("#cccccc")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, HexColor("#C4C9D2")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (-1, -1), 8),
             ("RIGHTPADDING", (0, 0), (-1, -1), 8),
@@ -753,7 +753,7 @@ with tabs[1]:
             bv_h = st.slider("Height", 300, 800, chart_height, 50, key="bv_h")
         bv_c = NAGARRO_COLORS
 
-        st.dataframe(drop_time_cols(bv), use_container_width=True, height=300)
+        st.dataframe(drop_time_cols(bv), use_container_width=True, height=300, hide_index=True)
 
         b1, b2 = st.columns(2)
         nc = find_col(bv, "national")
@@ -784,7 +784,7 @@ with tabs[1]:
         st.markdown("#### Total Expenses (COC Fee)")
         bv_total_cost = sum(r["Cost"] for r in bv_exp)
         st.metric("Total Business Visit Cost", f"{bv_total_cost:,.0f} SAR")
-        fig = make_expense_line(bv_exp, "Business Visit Monthly Expenses", bv_h, "#46d7ab")
+        fig = make_expense_line(bv_exp, "Business Visit Monthly Expenses", bv_h, "#47D7AC")
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("Business Visit Visa 2026 sheet not found.")
@@ -801,7 +801,7 @@ with tabs[2]:
             tw_h = st.slider("Height", 300, 800, chart_height, 50, key="tw_h")
         tw_c = NAGARRO_COLORS
 
-        st.dataframe(drop_time_cols(tw), use_container_width=True, height=300)
+        st.dataframe(drop_time_cols(tw), use_container_width=True, height=300, hide_index=True)
 
         t1, t2 = st.columns(2)
         nc = find_col(tw, "national")
@@ -828,7 +828,7 @@ with tabs[2]:
         st.markdown("#### Total Expenses")
         tw_total_cost = sum(r["Cost"] for r in tw_exp)
         st.metric("Total Temporary Work Cost", f"{tw_total_cost:,.0f} SAR")
-        fig = make_expense_line(tw_exp, "Temporary Work Monthly Expenses", tw_h, "#2e008b")
+        fig = make_expense_line(tw_exp, "Temporary Work Monthly Expenses", tw_h, "#FBD872")
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("Temporary Work Visa 2026 sheet not found.")
@@ -845,7 +845,7 @@ with tabs[3]:
             pw_h = st.slider("Height", 300, 800, chart_height, 50, key="pw_h")
         pw_c = NAGARRO_COLORS
 
-        st.dataframe(drop_time_cols(pw), use_container_width=True, height=300)
+        st.dataframe(drop_time_cols(pw), use_container_width=True, height=300, hide_index=True)
 
         p1, p2 = st.columns(2)
         nc = find_col(pw, "national")
@@ -887,13 +887,13 @@ with tabs[3]:
 
         pe1, pe2 = st.columns(2)
         with pe1:
-            fig = make_expense_line(pw_before, "Before Arrival to KSA (Monthly)", pw_h, "#46d7ab")
+            fig = make_expense_line(pw_before, "Before Arrival to KSA (Monthly)", pw_h, "#47D7AC")
             st.plotly_chart(fig, use_container_width=True)
         with pe2:
-            fig = make_expense_line(pw_after, "After Arrival in KSA (Monthly)", pw_h, "#2e008b")
+            fig = make_expense_line(pw_after, "After Arrival in KSA (Monthly)", pw_h, "#FBD872")
             st.plotly_chart(fig, use_container_width=True)
 
-        fig = make_expense_line(pw_total, "Total Permanent Work Expenses (Monthly)", pw_h, "#c3c9d2")
+        fig = make_expense_line(pw_total, "Total Permanent Work Expenses (Monthly)", pw_h, "#F8485E")
         st.plotly_chart(fig, use_container_width=True)
 
         # All 3 on one chart
@@ -988,13 +988,13 @@ with tabs[4]:
     st.markdown("#### Individual Visa Type Expenses")
     ie1, ie2, ie3 = st.columns(3)
     with ie1:
-        fig = make_expense_line(bv_exp, "Business Visit", 400, "#46d7ab")
+        fig = make_expense_line(bv_exp, "Business Visit", 400, "#47D7AC")
         st.plotly_chart(fig, use_container_width=True)
     with ie2:
-        fig = make_expense_line(tw_exp, "Temporary Work", 400, "#2e008b")
+        fig = make_expense_line(tw_exp, "Temporary Work", 400, "#FBD872")
         st.plotly_chart(fig, use_container_width=True)
     with ie3:
-        fig = make_expense_line(pw_total, "Permanent Work", 400, "#c3c9d2")
+        fig = make_expense_line(pw_total, "Permanent Work", 400, "#F8485E")
         st.plotly_chart(fig, use_container_width=True)
 
     # Monthly total table
