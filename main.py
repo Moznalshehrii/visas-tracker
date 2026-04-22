@@ -24,8 +24,10 @@ st.set_page_config(page_title="Visas Tracker 2026", page_icon="🌍", layout="wi
 
 st.markdown("""
 <style>
-    .main-header { font-size: 2.2rem; font-weight: 700; color: #5CE0B8; margin-bottom: 0; }
-    .sub-header { font-size: 1rem; color: #a0aec0; margin-top: -10px; margin-bottom: 20px; }
+    .main-header { font-size: 5rem !important; font-weight: 900 !important; color: #5CE0B8 !important; margin: 0 0 4px 0 !important; line-height: 1.05 !important; letter-spacing: -1px !important; }
+    .sub-header { font-size: 1.1rem !important; color: #a0aec0 !important; margin-top: 0 !important; margin-bottom: 24px !important; }
+    .stTabs [data-baseweb="tab-panel"] h2,
+    .stTabs [data-baseweb="tab-panel"] [data-testid="stHeadingWithActionElements"] h2 { font-size: 2.4rem !important; font-weight: 800 !important; }
     .metric-card { background: linear-gradient(135deg, #5CE0B8 0%, #1B1F3B 100%); padding: 20px; border-radius: 12px; color: white; text-align: center; }
     .metric-card h3 { margin: 0; font-size: 2rem; font-weight: 700; }
     .metric-card p { margin: 5px 0 0 0; font-size: 0.9rem; opacity: 0.85; }
@@ -37,12 +39,12 @@ st.markdown("""
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CHART_TYPES = ["Bar", "Pie", "Donut", "Line", "Area", "Treemap", "Sunburst", "Funnel", "Scatter", "Histogram", "Heatmap"]
-NAGARRO_COLORS = ["#46d7ab", "#2e008b", "#c3c9d2", "#8B7EB8", "#3D6B6B", "#A8E6CF"]
+NAGARRO_COLORS = ["#46d7ab", "#2e008b", "#E69F00", "#56B4E9", "#CC79A7", "#F0E442"]
 
 # Timeline Oct 2025 – Dec 2026
 TIMELINE = [(2025, m) for m in range(10, 13)] + [(2026, m) for m in range(1, 13)]
 TIMELINE_LABELS = [f"{calendar.month_abbr[m].upper()} {y}" for y, m in TIMELINE]
-LINE_COLORS = {"Business": "#46d7ab", "Temporary": "#2e008b", "Permanent": "#c3c9d2"}
+LINE_COLORS = {"Business": "#46d7ab", "Temporary": "#2e008b", "Permanent": "#E69F00"}
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +77,12 @@ def load_excel(file_bytes: bytes) -> dict[str, pd.DataFrame]:
                 sheets[key] = df
                 break
     return sheets
+
+
+def drop_time_cols(df):
+    if df is None:
+        return df
+    return df.drop(columns=[c for c in df.columns if "time" in str(c).lower()], errors="ignore")
 
 
 def find_col(df, *keywords):
@@ -204,7 +212,7 @@ def make_expense_line(records, title, height, color="#46d7ab"):
 
 def make_multi_expense_line(series_dict, title, height):
     """series_dict: {name: [{Year, Month_Num, Cost}]}"""
-    colors = ["#46d7ab", "#2e008b", "#c3c9d2", "#8B7EB8"]
+    colors = ["#46d7ab", "#2e008b", "#E69F00", "#56B4E9"]
     fig = go.Figure()
     for i, (name, records) in enumerate(series_dict.items()):
         df = pd.DataFrame(records) if records else pd.DataFrame(columns=["Year", "Month_Num", "Cost"])
@@ -590,15 +598,15 @@ with tabs[0]:
         st.plotly_chart(fig_vt, use_container_width=True)
         ov_figs.append(("Visa Type", fig_vt))
 
-    # Occupations
+    # Professions
     if all_occ:
-        fig_occ = make_chart(pd.DataFrame({"Occupation": all_occ}), "Occupation", None, ov_chart, ov_color, ov_h + 100, "Occupations")
+        fig_occ = make_chart(pd.DataFrame({"Profession": all_occ}), "Profession", None, ov_chart, ov_color, ov_h + 100, "Professions")
         st.plotly_chart(fig_occ, use_container_width=True)
-        ov_figs.append(("Occupations", fig_occ))
+        ov_figs.append(("Professions", fig_occ))
     st.markdown("---")
 
-    # Redundancy
-    st.markdown("#### Redundancy")
+    # Frequency
+    st.markdown("#### Frequency")
     pass_nat_records = []
     for key, df in sheets.items():
         p_col, n_col, name_c = find_col(df, "passport"), find_col(df, "national"), find_col(df, "employee name", "name")
@@ -671,7 +679,7 @@ Data Summary:
 - Total visas: {n_total} (Business Visit: {n_bv}, Temporary Work: {n_tw}, Permanent Work: {n_pw})
 - Nationalities: {n_nationalities} — breakdown: {nat_summary}
 - Unique passport numbers: {n_passports}
-- Occupations: {occ_summary}
+- Professions: {occ_summary}
 
 Expenses:
 - Business Visit total: {total_bv_cost:,.0f} SAR
@@ -679,7 +687,7 @@ Expenses:
 - Permanent Work total: {total_pw_cost:,.0f} SAR
 - Grand Total: {grand:,.0f} SAR
 
-Redundant passports (appearing more than once):
+Frequent passports (appearing more than once):
 {redundant_text if redundant_text else "None found"}
 
 Please write a professional summary report with these sections:
@@ -687,7 +695,7 @@ Please write a professional summary report with these sections:
 2. Visa Distribution Overview
 3. Nationality & Workforce Analysis
 4. Expense Analysis
-5. Redundancy Alerts
+5. Frequency Alerts
 6. Key Insights & Recommendations
 
 Format it nicely with markdown headers, bullet points, and bold key numbers."""
@@ -745,7 +753,7 @@ with tabs[1]:
             bv_h = st.slider("Height", 300, 800, chart_height, 50, key="bv_h")
         bv_c = NAGARRO_COLORS
 
-        st.dataframe(bv, use_container_width=True, height=300)
+        st.dataframe(drop_time_cols(bv), use_container_width=True, height=300)
 
         b1, b2 = st.columns(2)
         nc = find_col(bv, "national")
@@ -793,7 +801,7 @@ with tabs[2]:
             tw_h = st.slider("Height", 300, 800, chart_height, 50, key="tw_h")
         tw_c = NAGARRO_COLORS
 
-        st.dataframe(tw, use_container_width=True, height=300)
+        st.dataframe(drop_time_cols(tw), use_container_width=True, height=300)
 
         t1, t2 = st.columns(2)
         nc = find_col(tw, "national")
@@ -803,7 +811,7 @@ with tabs[2]:
         oc = find_col(tw, "occup", "profes")
         if oc:
             with t2:
-                st.plotly_chart(make_chart(tw, oc, None, tw_chart, tw_c, tw_h, "By Occupation"), use_container_width=True)
+                st.plotly_chart(make_chart(tw, oc, None, tw_chart, tw_c, tw_h, "By Profession"), use_container_width=True)
         emb = find_col(tw, "embassy")
         if emb:
             st.plotly_chart(make_chart(tw, emb, None, tw_chart, tw_c, tw_h, "By Embassy"), use_container_width=True)
@@ -837,7 +845,7 @@ with tabs[3]:
             pw_h = st.slider("Height", 300, 800, chart_height, 50, key="pw_h")
         pw_c = NAGARRO_COLORS
 
-        st.dataframe(pw, use_container_width=True, height=300)
+        st.dataframe(drop_time_cols(pw), use_container_width=True, height=300)
 
         p1, p2 = st.columns(2)
         nc = find_col(pw, "national")
