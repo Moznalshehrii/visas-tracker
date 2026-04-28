@@ -600,17 +600,17 @@ with tabs[0]:
     with r2c1:
         if all_nat:
             fig_nat = make_chart(pd.DataFrame({"Nationality": all_nat}), "Nationality", None, ov_chart, ov_color, ov_h, "Nationality")
-            st.plotly_chart(fig_nat, use_container_width=True)
+            st.plotly_chart(fig_nat, width='stretch')
             ov_figs.append(("Nationality", fig_nat))
     with r2c2:
         fig_vt = make_chart(pd.DataFrame({"Visa Type": visa_type_list}), "Visa Type", None, ov_chart, ov_color, ov_h, "Visa Type")
-        st.plotly_chart(fig_vt, use_container_width=True)
+        st.plotly_chart(fig_vt, width='stretch')
         ov_figs.append(("Visa Type", fig_vt))
 
     # Professions
     if all_occ:
         fig_occ = make_chart(pd.DataFrame({"Profession": all_occ}), "Profession", None, ov_chart, ov_color, ov_h + 100, "Professions")
-        st.plotly_chart(fig_occ, use_container_width=True)
+        st.plotly_chart(fig_occ, width='stretch')
         ov_figs.append(("Professions", fig_occ))
     st.markdown("---")
 
@@ -627,7 +627,7 @@ with tabs[0]:
         pn_counts = pn_df.groupby(["Passport Number", "Name", "Nationality"]).size().reset_index(name="Count")
         redundant = pn_counts[pn_counts["Count"] > 1].sort_values("Count", ascending=False).reset_index(drop=True)
         if not redundant.empty:
-            st.dataframe(redundant, use_container_width=True, hide_index=True)
+            st.dataframe(redundant, width='stretch', hide_index=True)
         else:
             st.info("No duplicate passport numbers found.")
     st.markdown("---")
@@ -648,7 +648,7 @@ with tabs[0]:
                       margin=dict(l=40, r=40, t=60, b=40), title_font_size=16,
                       legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
     fig_issuance = fig
-    st.plotly_chart(fig_issuance, use_container_width=True)
+    st.plotly_chart(fig_issuance, width='stretch')
     ov_figs.append(("Monthly Visa Issuance", fig_issuance))
     st.markdown("---")
 
@@ -657,13 +657,13 @@ with tabs[0]:
     fig_exp = make_multi_expense_line(
         {"Business Visit": bv_exp, "Temporary Work": tw_exp, "Permanent Work": pw_total},
         "MONTHLY EXPENSES BY VISA TYPE (OCT 2025 – DEC 2026)", ov_h + 50)
-    st.plotly_chart(fig_exp, use_container_width=True, key="ov_expense_chart")
+    st.plotly_chart(fig_exp, width='stretch', key="ov_expense_chart")
     ov_figs.append(("Monthly Expenses", fig_exp))
 
     st.markdown("---")
 
     # Print Summary — generates a downloadable PDF
-    if st.button("Print Summary", type="primary", use_container_width=True, key="print_report"):
+    if st.button("Print Summary", type="primary", width='stretch', key="print_report"):
         with st.spinner("Generating summary report..."):
             # Build summary data for the AI
             total_bv_cost = sum(r["Cost"] for r in bv_exp)
@@ -743,7 +743,7 @@ Format it nicely with markdown headers, bullet points, and bold key numbers."""
             file_name=fname,
             mime="application/pdf",
             type="primary",
-            use_container_width=True,
+            width='stretch',
             key="dl_summary_pdf",
         )
         st.markdown("---")
@@ -762,23 +762,23 @@ with tabs[1]:
             bv_h = st.slider("Height", 300, 800, chart_height, 50, key="bv_h")
         bv_c = NAGARRO_COLORS
 
-        st.dataframe(drop_time_cols(bv), use_container_width=True, height=300, hide_index=True)
+        st.dataframe(drop_time_cols(bv), width='stretch', height=300, hide_index=True)
 
         b1, b2 = st.columns(2)
         nc = find_col(bv, "national")
         if nc:
             with b1:
-                st.plotly_chart(make_chart(bv, nc, None, bv_chart, bv_c, bv_h, "By Nationality"), use_container_width=True)
+                st.plotly_chart(make_chart(bv, nc, None, bv_chart, bv_c, bv_h, "By Nationality"), width='stretch')
         rc = find_col(bv, "requester")
         if rc:
             with b2:
-                st.plotly_chart(make_chart(bv, rc, None, bv_chart, bv_c, bv_h, "By Requester"), use_container_width=True)
+                st.plotly_chart(make_chart(bv, rc, None, bv_chart, bv_c, bv_h, "By Requester"), width='stretch')
         hc = find_col(bv, "handle")
         if hc:
-            st.plotly_chart(make_chart(bv, hc, None, bv_chart, bv_c, bv_h, "By Handler"), use_container_width=True)
+            st.plotly_chart(make_chart(bv, hc, None, bv_chart, bv_c, bv_h, "By Handler"), width='stretch')
         cc = find_col(bv, "collect")
         if cc:
-            st.plotly_chart(make_chart(bv, cc, None, bv_chart, bv_c, bv_h, "By Collection City"), use_container_width=True)
+            st.plotly_chart(make_chart(bv, cc, None, bv_chart, bv_c, bv_h, "By Collection City"), width='stretch')
         dc = find_col(bv, "issuance", "date")
         if dc:
             bv_d = bv.copy()
@@ -786,7 +786,7 @@ with tabs[1]:
             bv_d = bv_d.dropna(subset=[dc])
             if not bv_d.empty:
                 bv_d["Month"] = bv_d[dc].dt.to_period("M").astype(str)
-                st.plotly_chart(make_chart(bv_d, "Month", None, "Line" if bv_chart in ["Pie", "Donut", "Treemap", "Sunburst"] else bv_chart, bv_c, bv_h, "Issuance Trend by Month"), use_container_width=True)
+                st.plotly_chart(make_chart(bv_d, "Month", None, "Line" if bv_chart in ["Pie", "Donut", "Treemap", "Sunburst"] else bv_chart, bv_c, bv_h, "Issuance Trend by Month"), width='stretch')
 
         # Expense line chart
         st.markdown("---")
@@ -794,7 +794,7 @@ with tabs[1]:
         bv_total_cost = sum(r["Cost"] for r in bv_exp)
         st.metric("Total Business Visit Cost", f"{bv_total_cost:,.0f} SAR")
         fig = make_expense_line(bv_exp, "Business Visit Monthly Expenses", bv_h, "#47D7AC")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.warning("Business Visit Visa 2026 sheet not found.")
 
@@ -810,27 +810,27 @@ with tabs[2]:
             tw_h = st.slider("Height", 300, 800, chart_height, 50, key="tw_h")
         tw_c = NAGARRO_COLORS
 
-        st.dataframe(drop_time_cols(tw), use_container_width=True, height=300, hide_index=True)
+        st.dataframe(drop_time_cols(tw), width='stretch', height=300, hide_index=True)
 
         t1, t2 = st.columns(2)
         nc = find_col(tw, "national")
         if nc:
             with t1:
-                st.plotly_chart(make_chart(tw, nc, None, tw_chart, tw_c, tw_h, "By Nationality"), use_container_width=True)
+                st.plotly_chart(make_chart(tw, nc, None, tw_chart, tw_c, tw_h, "By Nationality"), width='stretch')
         oc = find_col(tw, "occup", "profes")
         if oc:
             with t2:
-                st.plotly_chart(make_chart(tw, oc, None, tw_chart, tw_c, tw_h, "By Profession"), use_container_width=True)
+                st.plotly_chart(make_chart(tw, oc, None, tw_chart, tw_c, tw_h, "By Profession"), width='stretch')
         emb = find_col(tw, "embassy")
         if emb:
-            st.plotly_chart(make_chart(tw, emb, None, tw_chart, tw_c, tw_h, "By Embassy"), use_container_width=True)
+            st.plotly_chart(make_chart(tw, emb, None, tw_chart, tw_c, tw_h, "By Embassy"), width='stretch')
         fee_cols = [c for c in tw.columns if "fee" in c.lower()]
         if fee_cols:
             tw_fees = tw[fee_cols].apply(pd.to_numeric, errors="coerce").sum().reset_index()
             tw_fees.columns = ["Fee Type", "Total"]
             tw_fees = tw_fees[tw_fees["Total"] > 0]
             if not tw_fees.empty:
-                st.plotly_chart(make_chart(tw_fees, "Fee Type", "Total", tw_chart, tw_c, tw_h, "Fee Breakdown"), use_container_width=True)
+                st.plotly_chart(make_chart(tw_fees, "Fee Type", "Total", tw_chart, tw_c, tw_h, "Fee Breakdown"), width='stretch')
 
         # Expense line chart
         st.markdown("---")
@@ -838,7 +838,7 @@ with tabs[2]:
         tw_total_cost = sum(r["Cost"] for r in tw_exp)
         st.metric("Total Temporary Work Cost", f"{tw_total_cost:,.0f} SAR")
         fig = make_expense_line(tw_exp, "Temporary Work Monthly Expenses", tw_h, "#FBD872")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.warning("Temporary Work Visa 2026 sheet not found.")
 
@@ -854,20 +854,20 @@ with tabs[3]:
             pw_h = st.slider("Height", 300, 800, chart_height, 50, key="pw_h")
         pw_c = NAGARRO_COLORS
 
-        st.dataframe(drop_time_cols(pw), use_container_width=True, height=300, hide_index=True)
+        st.dataframe(drop_time_cols(pw), width='stretch', height=300, hide_index=True)
 
         p1, p2 = st.columns(2)
         nc = find_col(pw, "national")
         if nc:
             with p1:
-                st.plotly_chart(make_chart(pw, nc, None, pw_chart, pw_c, pw_h, "By Nationality"), use_container_width=True)
+                st.plotly_chart(make_chart(pw, nc, None, pw_chart, pw_c, pw_h, "By Nationality"), width='stretch')
         pc_col = find_col(pw, "project")
         if pc_col:
             with p2:
-                st.plotly_chart(make_chart(pw, pc_col, None, pw_chart, pw_c, pw_h, "By Project"), use_container_width=True)
+                st.plotly_chart(make_chart(pw, pc_col, None, pw_chart, pw_c, pw_h, "By Project"), width='stretch')
         prof = find_col(pw, "profes", "occup")
         if prof:
-            st.plotly_chart(make_chart(pw, prof, None, pw_chart, pw_c, pw_h, "By Profession"), use_container_width=True)
+            st.plotly_chart(make_chart(pw, prof, None, pw_chart, pw_c, pw_h, "By Profession"), width='stretch')
         fee_names = ["MOI Fee", "COC Fee", "MOFA Fee"]
         found_fees = [c for c in pw.columns if any(f.lower() in c.lower() for f in fee_names)]
         if found_fees:
@@ -875,10 +875,10 @@ with tabs[3]:
             pw_fees.columns = ["Fee Type", "Total"]
             pw_fees = pw_fees[pw_fees["Total"] > 0]
             if not pw_fees.empty:
-                st.plotly_chart(make_chart(pw_fees, "Fee Type", "Total", pw_chart, pw_c, pw_h, "Fee Breakdown"), use_container_width=True)
+                st.plotly_chart(make_chart(pw_fees, "Fee Type", "Total", pw_chart, pw_c, pw_h, "Fee Breakdown"), width='stretch')
         city = find_col(pw, "city")
         if city:
-            st.plotly_chart(make_chart(pw, city, None, pw_chart, pw_c, pw_h, "By City"), use_container_width=True)
+            st.plotly_chart(make_chart(pw, city, None, pw_chart, pw_c, pw_h, "By City"), width='stretch')
 
         # 4 Expense line charts
         st.markdown("---")
@@ -897,19 +897,19 @@ with tabs[3]:
         pe1, pe2 = st.columns(2)
         with pe1:
             fig = make_expense_line(pw_before, "Before Arrival to KSA (Monthly)", pw_h, "#47D7AC")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         with pe2:
             fig = make_expense_line(pw_after, "After Arrival in KSA (Monthly)", pw_h, "#FBD872")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         fig = make_expense_line(pw_total, "Total Permanent Work Expenses (Monthly)", pw_h, "#F8485E")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         # All 3 on one chart
         fig = make_multi_expense_line(
             {"Before Arrival": pw_before, "After Arrival": pw_after, "Total": pw_total},
             "Permanent Work — All Expense Categories", pw_h + 50)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.warning("Permanent Work Visa 2026 sheet not found.")
 
@@ -990,7 +990,7 @@ with tabs[4]:
     fig = make_multi_expense_line(
         {"Business Visit": bv_exp, "Temporary Work": tw_exp, "Permanent Work": pw_total, "All Combined": all_exp},
         "Monthly Expenses — All Visa Types (OCT 2025 – DEC 2026)", 500)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # Individual charts side by side
     st.markdown("---")
@@ -998,13 +998,13 @@ with tabs[4]:
     ie1, ie2, ie3 = st.columns(3)
     with ie1:
         fig = make_expense_line(bv_exp, "Business Visit", 400, "#47D7AC")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     with ie2:
         fig = make_expense_line(tw_exp, "Temporary Work", 400, "#FBD872")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     with ie3:
         fig = make_expense_line(pw_total, "Permanent Work", 400, "#F8485E")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     # Monthly total table
     st.markdown("---")
@@ -1019,7 +1019,7 @@ with tabs[4]:
         if total_m > 0:
             table_rows.append({"Month": label, "Business Visit": f"{bv_m:,.0f}", "Temporary Work": f"{tw_m:,.0f}", "Permanent Work": f"{pw_m:,.0f}", "Total": f"{total_m:,.0f}"})
     if table_rows:
-        st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(table_rows), width='stretch', hide_index=True)
     else:
         st.info("No expense data available.")
 
@@ -1032,7 +1032,7 @@ with tabs[4]:
         fig = px.pie(dist_df, names="Type", values="Cost", color_discrete_sequence=NAGARRO_COLORS, title="Total Expense Distribution", hole=0.4)
         fig.update_traces(textposition="inside", textinfo="percent+value+label")
         fig.update_layout(height=450, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 
 # ===== TAB 5 : AI CHAT =====================================================
