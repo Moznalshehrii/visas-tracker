@@ -61,6 +61,9 @@ def load_excel(file_bytes: bytes) -> dict[str, pd.DataFrame]:
                 df = pd.read_excel(xls, sheet_name=sn, header=hdr_row)
                 df.columns = [str(c).strip() for c in df.columns]
                 df = df.dropna(how="all")
+                for col in df.columns:
+                    if df[col].dtype == object:
+                        df[col] = df[col].apply(lambda v: v.strip() if isinstance(v, str) else v)
                 name_col = None
                 for candidate in ["Employee Name", "Name"]:
                     if candidate in df.columns:
@@ -82,7 +85,11 @@ def load_excel(file_bytes: bytes) -> dict[str, pd.DataFrame]:
 def drop_time_cols(df):
     if df is None:
         return df
-    return df.drop(columns=[c for c in df.columns if "time" in str(c).lower()], errors="ignore")
+    df = df.drop(columns=[c for c in df.columns if "time" in str(c).lower()], errors="ignore")
+    for c in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[c]):
+            df[c] = df[c].dt.date
+    return df
 
 
 def find_col(df, *keywords):
@@ -185,6 +192,8 @@ def make_chart(df, x, y, chart_type, color_scale, height, title=""):
         fig = px.bar(df, x=x, color_discrete_sequence=cs, title=title)
     fig.update_layout(height=height, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                       font=dict(size=12), margin=dict(l=40, r=40, t=60, b=40), title_font_size=16)
+    if chart_type in ("Bar", "Funnel", "Scatter", "Histogram"):
+        fig.update_xaxes(showticklabels=False, title_text="")
     return fig
 
 
@@ -579,8 +588,8 @@ with tabs[0]:
 
     # Summary metrics
     st.markdown("#### Summary")
-    sm1, sm2, sm3, sm4 = st.columns(4)
-    for col, (label, val) in zip([sm1, sm2, sm3, sm4], [("Visa Types", 3), ("Nationalities", n_nationalities), ("Passport Numbers", n_passports), ("Visas", n_total)]):
+    sm1, sm2, sm3 = st.columns(3)
+    for col, (label, val) in zip([sm1, sm2, sm3], [("Nationalities", n_nationalities), ("Passport Numbers", n_passports), ("Visas", n_total)]):
         with col:
             st.metric(label, val)
     st.markdown("---")
