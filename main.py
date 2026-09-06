@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 from groq import Groq
 from dotenv import load_dotenv
 import os
@@ -21,6 +22,9 @@ from reportlab.platypus import (
 load_dotenv()
 
 
+# ---------------------------------------------------------------------------
+# Kaleido / Chrome bootstrap (needed for chart -> PNG export in the PDF)
+# ---------------------------------------------------------------------------
 @st.cache_resource
 def ensure_chrome():
     """Download Kaleido's headless Chrome once per container lifetime."""
@@ -30,6 +34,18 @@ def ensure_chrome():
 
 
 ensure_chrome()
+
+# Containers lack the namespaces Chrome's sandbox needs — disable it.
+try:
+    pio.defaults.chromium_args = (
+        "--headless",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+    )
+except AttributeError:
+    pass
+
 
 st.set_page_config(page_title="Visas Tracker 2026", page_icon="🌍", layout="wide")
 
@@ -439,7 +455,7 @@ def build_pdf_summary(report_md, metrics, chart_figs, logo_path=None):
         else:
             story.append(Paragraph(_md_to_rl(line), body))
 
-    # --- Charts (ALWAYS embedded — never silently skipped) ---
+    # --- Charts ---
     if chart_figs:
         story.append(PageBreak())
         story.append(Paragraph("Dashboard Charts", h2))
@@ -448,9 +464,13 @@ def build_pdf_summary(report_md, metrics, chart_figs, logo_path=None):
         story.append(Spacer(1, 0.3 * cm))
 
         for i, (name, fig) in enumerate(chart_figs):
-            # Render chart to high-DPI PNG. If this fails, surface the error
-            # loudly — do NOT silently skip (the user explicitly wants charts).
-            png = fig.to_image(format="png", width=1400, height=700, scale=2)
+            # Render chart to high-DPI PNG. If Chrome/Kaleido fails, note it in
+            # the PDF and keep going so the report still gets produced.
+            try:
+                png = fig.to_image(format="png", width=1400, height=700, scale=2)
+            except Exception as e:
+                story.append(Paragraph(f"<b>{i + 1}. {name}</b> — chart unavailable ({e})", h3))
+                continue
             story.append(Paragraph(f"<b>{i + 1}. {name}</b>", h3))
             img = Image(io.BytesIO(png), width=17 * cm, height=8.5 * cm, kind="proportional")
             story.append(img)
