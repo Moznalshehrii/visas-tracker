@@ -357,6 +357,19 @@ NAGARRO_NAVY = HexColor("#2E008B")
 NAGARRO_GREY = HexColor("#4E5E78")
 
 
+def _clean_unicode(text):
+    """Replace glyphs the built-in Helvetica font lacks with ASCII equivalents."""
+    repl = {
+        "\u2011": "-", "\u2010": "-", "\u2013": "-", "\u2014": "-",
+        "\u2009": " ", "\u202f": " ", "\u00a0": " ", "\u200b": "",
+        "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+        "\u2026": "...", "\u2265": ">=", "\u2264": "<=", "\u2248": "~",
+    }
+    for k, v in repl.items():
+        text = text.replace(k, v)
+    return text
+
+
 def _md_to_rl(text):
     """Convert a single line of markdown inline formatting to ReportLab markup."""
     # Escape ampersands and angle brackets that aren't part of our tags
@@ -369,6 +382,45 @@ def _md_to_rl(text):
     # `code` → just bold-ish
     text = re.sub(r"`(.+?)`", r"<font face='Courier'>\1</font>", text)
     return text
+
+
+def _make_md_table(rows, body_style):
+    """Turn a list of markdown table row strings into a ReportLab Table."""
+    parsed = []
+    for r in rows:
+        cells = [c.strip() for c in r.strip().strip("|").split("|")]
+        # skip separator rows like |---|---|
+        if all(c and set(c) <= set("-: ") for c in cells):
+            continue
+        parsed.append(cells)
+    if not parsed:
+        return None
+
+    ncols = max(len(r) for r in parsed)
+    parsed = [r + [""] * (ncols - len(r)) for r in parsed]
+
+    hdr = ParagraphStyle("TblHdr", parent=body_style, fontSize=8.5,
+                         leading=11, spaceAfter=0, textColor=HexColor("#FFFFFF"))
+    cell = ParagraphStyle("TblCell", parent=body_style, fontSize=8.5,
+                          leading=11, spaceAfter=0)
+
+    data = [[Paragraph(_md_to_rl(c), hdr if i == 0 else cell) for c in row]
+            for i, row in enumerate(parsed)]
+
+    avail = 17.4 * cm
+    tbl = Table(data, colWidths=[avail / ncols] * ncols, repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), NAGARRO_NAVY),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [HexColor("#FFFFFF"), HexColor("#F4F6F9")]),
+        ("BOX", (0, 0), (-1, -1), 0.5, NAGARRO_GREY),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, HexColor("#C4C9D2")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    return tbl
 
 
 def build_pdf_summary(report_md, metrics, chart_figs, logo_path=None):
@@ -419,7 +471,8 @@ def build_pdf_summary(report_md, metrics, chart_figs, logo_path=None):
     # --- Key Metrics table ---
     if metrics:
         story.append(Paragraph("Key Metrics", h2))
-        rows = [[Paragraph(f"<b>{k}</b>", body), Paragraph(str(v), body)] for k, v in metrics.items()]
+        rows = [[Paragraph(f"<b>{_clean_unicode(str(k))}</b>", body),
+                 Paragraph(_clean_unicode(str(v)), body)] for k, v in metrics.items()]
         tbl = Table(rows, colWidths=[6 * cm, 10 * cm])
         tbl.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (0, -1), HexColor("#EFF1F4")),
@@ -435,18 +488,41 @@ def build_pdf_summary(report_md, metrics, chart_figs, logo_path=None):
         story.append(Spacer(1, 0.4 * cm))
 
     # --- AI Report body (markdown → ReportLab) ---
+    table_buf = []
+
+    def flush_table():
+        if table_buf:
+            t = _make_md_table(table_buf, body)
+            if t:
+                story.append(Spacer(1, 0.2 * cm))
+                story.append(t)
+                story.append(Spacer(1, 0.3 * cm))
+            table_buf.clear()
+
     for raw in (report_md or "").splitlines():
-        line = raw.rstrip()
-        if not line.strip():
+        line = _clean_unicode(raw.rstrip())
+        stripped = line.strip()
+
+        # Buffer consecutive markdown table rows, render them as a real table
+        if stripped.startswith("|") and stripped.count("|") >= 2:
+            table_buf.append(stripped)
+            continue
+        flush_table()
+
+        if not stripped:
             story.append(Spacer(1, 0.15 * cm))
             continue
-        if line.startswith("### "):
+        if stripped in ("---", "***", "___"):
+            continue
+        if line.startswith("#### "):
+            story.append(Paragraph(_md_to_rl(line[5:]), h3))
+        elif line.startswith("### "):
             story.append(Paragraph(_md_to_rl(line[4:]), h3))
         elif line.startswith("## "):
             story.append(Paragraph(_md_to_rl(line[3:]), h2))
         elif line.startswith("# "):
             story.append(Paragraph(_md_to_rl(line[2:]), h1))
-        elif line.lstrip().startswith(("- ", "* ")):
+        elif line.lstrip().startswith(("- ", "* ", "• ")):
             item = line.lstrip()[2:]
             story.append(Paragraph(_md_to_rl(item), bullet, bulletText="•"))
         elif re.match(r"^\s*\d+\.\s+", line):
@@ -454,6 +530,8 @@ def build_pdf_summary(report_md, metrics, chart_figs, logo_path=None):
             story.append(Paragraph(_md_to_rl(item), bullet, bulletText="•"))
         else:
             story.append(Paragraph(_md_to_rl(line), body))
+
+    flush_table()
 
     # --- Charts ---
     if chart_figs:
@@ -496,11 +574,12 @@ def ask_groq(question, data_context):
                 {"role": "user", "content": f"2026 visa data:\n\n{data_context}\n\nQuestion: {question}"},
             ],
             temperature=0.2, max_tokens=2048,
-            reasoning_effort="low",
         )
         return resp.choices[0].message.content
     except Exception as e:
         return f"Error: {str(e)}"
+
+
 def build_data_context(sheets):
     parts = []
     labels = {"business_visit": "Business Visit Visa 2026", "temp_work": "Temporary Work Visa 2026", "perm_work": "Permanent Work Visa 2026"}
