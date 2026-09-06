@@ -20,6 +20,17 @@ from reportlab.platypus import (
 
 load_dotenv()
 
+
+@st.cache_resource
+def ensure_chrome():
+    """Download Kaleido's headless Chrome once per container lifetime."""
+    import kaleido
+    kaleido.get_chrome_sync()
+    return True
+
+
+ensure_chrome()
+
 st.set_page_config(page_title="Visas Tracker 2026", page_icon="🌍", layout="wide")
 
 st.markdown("""
