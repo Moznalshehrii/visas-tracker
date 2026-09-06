@@ -490,18 +490,17 @@ def ask_groq(question, data_context):
     try:
         client = Groq(api_key=GROQ_API_KEY)
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": "You are a helpful data analyst for 2026 visa tracking data. Answer accurately with markdown."},
                 {"role": "user", "content": f"2026 visa data:\n\n{data_context}\n\nQuestion: {question}"},
             ],
             temperature=0.2, max_tokens=2048,
+            reasoning_effort="low",
         )
         return resp.choices[0].message.content
     except Exception as e:
         return f"Error: {str(e)}"
-
-
 def build_data_context(sheets):
     parts = []
     labels = {"business_visit": "Business Visit Visa 2026", "temp_work": "Temporary Work Visa 2026", "perm_work": "Permanent Work Visa 2026"}
