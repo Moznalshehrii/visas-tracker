@@ -77,11 +77,19 @@ LINE_COLORS = {"Business": "#47D7AC", "Temporary": "#FBD872", "Permanent": "#F84
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+# Per-profile Excel template layout: key -> (sheet-name keyword, header row index).
+# Add/adjust the RHQ entries once the RHQ template is finalised.
+PROFILES = {
+    "Nagarro": {"business_visit": ("business visit", 2), "temp_work": ("temporary work", 3), "perm_work": ("permanent work", 3)},
+    "RHQ": {"business_visit": ("business visit", 2), "temp_work": ("temporary work", 3), "perm_work": ("permanent work", 3)},
+}
+
+
 @st.cache_data
-def load_excel(file_bytes: bytes) -> dict[str, pd.DataFrame]:
+def load_excel(file_bytes: bytes, profile: str = "Nagarro") -> dict[str, pd.DataFrame]:
     xls = pd.ExcelFile(io.BytesIO(file_bytes), engine="openpyxl")
     sheets = {}
-    targets = {"business_visit": ("business visit", 2), "temp_work": ("temporary work", 3), "perm_work": ("permanent work", 3)}
+    targets = PROFILES[profile]
     for key, (match_str, hdr_row) in targets.items():
         for sn in xls.sheet_names:
             if match_str in sn.lower():
@@ -602,7 +610,8 @@ st.markdown('<p class="sub-header">Upload your Excel file to explore 2026 visa d
 with st.sidebar:
     st.image("assets/nagarro_logo.png", width=80)
     st.markdown("### Settings")
-    uploaded = st.file_uploader("Upload Visas Tracker (.xlsx)", type=["xlsx"])
+    profile = st.selectbox("Profile", list(PROFILES.keys()), index=0)
+    uploaded = st.file_uploader(f"Upload Visas Tracker (.xlsx) - {profile}", type=["xlsx"], key=f"upload_{profile}")
     st.divider()
     st.markdown("### Chart Preferences")
     default_chart = st.selectbox("Default chart type", CHART_TYPES, index=0)
@@ -626,7 +635,7 @@ if uploaded is None:
 # Load
 # ---------------------------------------------------------------------------
 file_bytes = uploaded.read()
-sheets = load_excel(file_bytes)
+sheets = load_excel(file_bytes, profile)
 if not sheets:
     st.error("Could not find the expected sheets. Check the file format.")
     st.stop()
