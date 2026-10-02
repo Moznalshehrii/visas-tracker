@@ -7,6 +7,7 @@ from groq import Groq
 from dotenv import load_dotenv
 import os
 import io
+import hashlib
 import re
 import calendar
 from datetime import datetime
@@ -603,8 +604,10 @@ def ask_groq(question, data_context):
         return f"Error: {str(e)}"
 
 
-def build_data_context(sheets):
-    parts = []
+def build_data_context(sheets, profile=""):
+    parts = [f"PROFILE: {profile}. Use ONLY the data below; it is the complete dataset for this profile."]
+    counts = {k: len(sheets[k]) if k in sheets else 0 for k in ("business_visit", "temp_work", "perm_work")}
+    parts.append(f"Exact row counts: Business Visit = {counts['business_visit']}, Temporary Work = {counts['temp_work']}, Permanent Work = {counts['perm_work']}.")
     labels = {"business_visit": "Business Visit Visa 2026", "temp_work": "Temporary Work Visa 2026", "perm_work": "Permanent Work Visa 2026"}
     for key, df in sheets.items():
         name = labels.get(key, key)
@@ -651,6 +654,13 @@ if uploaded is None:
 # ---------------------------------------------------------------------------
 file_bytes = uploaded.read()
 sheets = load_excel(file_bytes, profile)
+
+# Reset AI chat / report state whenever the profile or file changes so profiles never mix.
+_ctx_key = (profile, hashlib.md5(file_bytes).hexdigest())
+if st.session_state.get("ctx_key") != _ctx_key:
+    st.session_state["ctx_key"] = _ctx_key
+    for _k in ("data_context", "messages", "summary_pdf", "summary_md"):
+        st.session_state.pop(_k, None)
 if not sheets:
     st.error("Could not find the expected sheets. Check the file format.")
     st.stop()
@@ -1171,10 +1181,10 @@ with tabs[4]:
 # ===== TAB 5 : AI CHAT =====================================================
 with tabs[5]:
     st.subheader("AI Data Assistant")
-    st.caption("Ask any question about your 2026 visa data. Powered by Groq (Llama 3.3 70B).")
+    st.caption(f"Profile: {profile}. Ask any question about your 2026 visa data. Powered by Groq (Llama 3.3 70B).")
 
     if "data_context" not in st.session_state:
-        st.session_state.data_context = build_data_context(sheets)
+        st.session_state.data_context = build_data_context(sheets, profile)
     if "messages" not in st.session_state:
         st.session_state.messages = [
             {"role": "assistant", "content": "Hello! I'm your 2026 visa data assistant. Ask me anything about Business Visit, Temporary Work, or Permanent Work visas."}
