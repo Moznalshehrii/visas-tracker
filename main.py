@@ -77,35 +77,58 @@ LINE_COLORS = {"Business": "#47D7AC", "Temporary": "#FBD872", "Permanent": "#F84
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+# Per-profile Excel layout: key -> (sheet-name keyword, header row index).
+# Sheets starting with "rhq" belong to the RHQ team only; Nagarro sheets never match them.
+SHEET_LAYOUT = {
+    "Nagarro": {"business_visit": ("business visit", 2), "temp_work": ("temporary work", 3), "perm_work": ("permanent work", 3)},
+    "RHQ": {"business_visit": ("rhq business visit", 2), "temp_work": ("rhq temporary work", 3), "perm_work": ("rhq permanent work", 3)},
+}
+PROFILES = ["Nagarro", "RHQ", "All Combined"]
+
+
+def _read_sheet(xls, profile, key):
+    match_str, hdr_row = SHEET_LAYOUT[profile][key]
+    for sn in xls.sheet_names:
+        low = sn.strip().lower()
+        if match_str not in low:
+            continue
+        if profile == "Nagarro" and low.startswith("rhq"):
+            continue
+        df = pd.read_excel(xls, sheet_name=sn, header=hdr_row)
+        df.columns = [str(c).strip() for c in df.columns]
+        df = df.dropna(how="all")
+        for col in df.columns:
+            if df[col].dtype == object:
+                df[col] = df[col].apply(lambda v: v.strip() if isinstance(v, str) else v)
+        name_col = None
+        for candidate in ["Employee Name", "Name"]:
+            if candidate in df.columns:
+                name_col = candidate
+                break
+        if name_col is None:
+            for c in df.columns:
+                if "name" in c.lower():
+                    name_col = c
+                    break
+        if name_col:
+            df = df.dropna(subset=[name_col])
+            df = df[df[name_col].astype(str).str.strip() != ""]
+        return df
+    return None
+
+
 @st.cache_data
-def load_excel(file_bytes: bytes) -> dict[str, pd.DataFrame]:
+def load_excel(file_bytes: bytes, profile: str = "Nagarro") -> dict[str, pd.DataFrame]:
     xls = pd.ExcelFile(io.BytesIO(file_bytes), engine="openpyxl")
     sheets = {}
-    targets = {"business_visit": ("business visit", 2), "temp_work": ("temporary work", 3), "perm_work": ("permanent work", 3)}
-    for key, (match_str, hdr_row) in targets.items():
-        for sn in xls.sheet_names:
-            if match_str in sn.lower():
-                df = pd.read_excel(xls, sheet_name=sn, header=hdr_row)
-                df.columns = [str(c).strip() for c in df.columns]
-                df = df.dropna(how="all")
-                for col in df.columns:
-                    if df[col].dtype == object:
-                        df[col] = df[col].apply(lambda v: v.strip() if isinstance(v, str) else v)
-                name_col = None
-                for candidate in ["Employee Name", "Name"]:
-                    if candidate in df.columns:
-                        name_col = candidate
-                        break
-                if name_col is None:
-                    for c in df.columns:
-                        if "name" in c.lower():
-                            name_col = c
-                            break
-                if name_col:
-                    df = df.dropna(subset=[name_col])
-                    df = df[df[name_col].astype(str).str.strip() != ""]
-                sheets[key] = df
-                break
+    for key in ("business_visit", "temp_work", "perm_work"):
+        if profile == "All Combined":
+            parts = [d for d in (_read_sheet(xls, p, key) for p in ("Nagarro", "RHQ")) if d is not None]
+            df = pd.concat(parts, ignore_index=True) if parts else None
+        else:
+            df = _read_sheet(xls, profile, key)
+        if df is not None and len(df):
+            sheets[key] = df
     return sheets
 
 
@@ -602,7 +625,8 @@ st.markdown('<p class="sub-header">Upload your Excel file to explore 2026 visa d
 with st.sidebar:
     st.image("assets/nagarro_logo.png", width=80)
     st.markdown("### Settings")
-    uploaded = st.file_uploader("Upload Visas Tracker (.xlsx)", type=["xlsx"])
+    profile = st.selectbox("Profile", PROFILES, index=0)
+    uploaded = st.file_uploader(f"Upload Visas Tracker (.xlsx) - {profile}", type=["xlsx"], key=f"upload_{profile}")
     st.divider()
     st.markdown("### Chart Preferences")
     default_chart = st.selectbox("Default chart type", CHART_TYPES, index=0)
@@ -626,7 +650,7 @@ if uploaded is None:
 # Load
 # ---------------------------------------------------------------------------
 file_bytes = uploaded.read()
-sheets = load_excel(file_bytes)
+sheets = load_excel(file_bytes, profile)
 if not sheets:
     st.error("Could not find the expected sheets. Check the file format.")
     st.stop()
