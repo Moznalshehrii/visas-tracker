@@ -23,11 +23,14 @@ from reportlab.platypus import (
 
 load_dotenv()
 
+# Must be the first Streamlit command in the script.
+st.set_page_config(page_title="Visas Tracker 2026", page_icon="🌍", layout="wide")
+
 
 # ---------------------------------------------------------------------------
 # Kaleido / Chrome bootstrap (needed for chart -> PNG export in the PDF)
 # ---------------------------------------------------------------------------
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def ensure_chrome():
     """Download Kaleido's headless Chrome once per container lifetime."""
     import kaleido
@@ -49,7 +52,6 @@ except AttributeError:
     pass
 
 
-st.set_page_config(page_title="Visas Tracker 2026", page_icon="🌍", layout="wide")
 
 st.markdown("""
 <style>
