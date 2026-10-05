@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import os
 import io
 import hashlib
+import json
 import re
 import calendar
 from datetime import datetime
@@ -636,19 +637,71 @@ def _controls(key, default_h):
     return fit, w, h
 
 
-def _pick_hidden(key, options, label):
-    """Clickable show/hide pills shown right above the chart. Returns the hidden values."""
-    if not options or len(options) < 2:
-        return []
-    shown = st.pills(label, options, selection_mode="multi", default=options, key=f"{key}|pills")
-    return [o for o in options if o not in (shown or [])]
+_LEGEND_JS = """
+export default function(component) {
+  const { data, parentElement, setStateValue } = component;
+  if (!window.Plotly) {
+    const s = document.createElement('script');
+    s.textContent = PLOTLY_SRC;
+    document.head.appendChild(s);
+  }
+  let div = parentElement.querySelector('.pc');
+  if (!div) {
+    div = document.createElement('div');
+    div.className = 'pc';
+    parentElement.appendChild(div);
+  }
+  div.__set = setStateValue;
+  const hidden = new Set((data.hidden || []).map(String));
+  const traces = data.fig.data.map(t => (t.name && hidden.has(String(t.name))) ? Object.assign({}, t, {visible: 'legendonly'}) : t);
+  const layout = data.fig.layout;
+  layout.font = Object.assign({}, layout.font || {}, {color: '#FFFFFF'});
+  if (layout.title) layout.title = Object.assign({}, layout.title, {x: 0.01, xanchor: 'left', font: {size: 16, color: '#FFFFFF'}});
+  const grid = 'rgba(255,255,255,0.12)';
+  for (const ax of ['xaxis', 'yaxis']) {
+    layout[ax] = Object.assign({}, layout[ax] || {}, {gridcolor: grid, zerolinecolor: grid, linecolor: grid});
+  }
+  if (traces.length && traces[0].type === 'pie') layout.hiddenlabels = Array.from(hidden);
+  if (layout.width) { div.style.width = layout.width + 'px'; } else { div.style.width = '100%'; }
+  window.Plotly.react(div, traces, layout, {responsive: true, displaylogo: false});
+  if (!div.__bound) {
+    div.__bound = true;
+    const report = () => {
+      const h = [];
+      (div.data || []).forEach(t => { if (t.visible === 'legendonly' && t.name) h.push(String(t.name)); });
+      ((div.layout || {}).hiddenlabels || []).forEach(l => h.push(String(l)));
+      div.__set('hidden', h);
+    };
+    div.on('plotly_restyle', report);
+    div.on('plotly_relayout', (e) => { if (e && e.hiddenlabels !== undefined) report(); });
+  }
+}
+"""
+
+
+@st.cache_resource
+def _legend_component():
+    import plotly
+    path = os.path.join(os.path.dirname(plotly.__file__), "package_data", "plotly.min.js")
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
+    return st.components.v2.component("legend_plotly", js="const PLOTLY_SRC = " + json.dumps(src) + ";\n" + _LEGEND_JS, isolate_styles=False)
+
+
+def _stored_hidden(key):
+    return st.session_state.get(f"{key}|hid", [])
 
 
 def _draw(fig, key, fit, w, h):
-    # Legend clicks only live in the browser and can't reach the summary, so they are
-    # disabled in favour of the pills above the chart.
-    fig.update_layout(height=h, width=None if fit else w, legend_itemclick=False, legend_itemdoubleclick=False)
-    st.plotly_chart(fig, width="stretch" if fit else "content", key=f"{key}|plot")
+    """Render with Plotly's own legend (click a colour square to hide/show). The clicks are
+    reported back to Python so the summary can honour them."""
+    fig.update_layout(height=h, width=None if fit else w)
+    payload = {"fig": json.loads(fig.to_json()), "hidden": _stored_hidden(key)}
+
+    def _remember():
+        st.session_state[f"{key}|hid"] = list(st.session_state[f"{key}|lg"].get("hidden") or [])
+
+    _legend_component()(key=f"{key}|lg", data=payload, default={"hidden": []}, on_hidden_change=_remember)
     return fig
 
 
@@ -658,32 +711,32 @@ def _next_key(title):
 
 
 def show_chart(fig):
-    """Render a ready-made figure with its own size / hide-series controls."""
+    """Render a ready-made figure with its own size controls; hidden series are dropped from the returned figure."""
     title = (fig.layout.title.text or "") if fig.layout.title else ""
     key = _next_key(title)
-    names = [t.name for t in fig.data if getattr(t, "name", None)] if len(fig.data) > 1 else []
     fit, w, h = _controls(key, fig.layout.height)
-    hidden = _pick_hidden(key, names, "Click to show / hide series")
+    _draw(fig, key, fit, w, h)
+    hidden = set(_stored_hidden(key))
     for t in fig.data:
-        if t.name in hidden:
+        if t.name is not None and str(t.name) in hidden:
             t.visible = False
-    return _draw(fig, key, fit, w, h)
+    return fig
 
 
 def chart_block(df, x, y, chart_type, color_scale, height, title=""):
-    """Build + render a category chart with size controls and a 'hide values' filter."""
+    """Build + render a category chart. Values hidden via the legend are removed from the returned (PDF) figure."""
     key = _next_key(title)
-    options = df[x].dropna().astype(str).value_counts().index.tolist()
     fit, w, h = _controls(key, height)
-    hidden = _pick_hidden(key, options, "Click to show / hide values")
+    fig = make_chart(df, x, y, chart_type, color_scale, h, title)
+    _draw(fig, key, fit, w, h)
+    hidden = _stored_hidden(key)
     _HIDDEN[title] = hidden
     if hidden:
         df = df[~df[x].astype(str).isin(hidden)]
-    if df.empty:
-        st.info(f"{title}: all values are hidden.")
-        return None
-    fig = make_chart(df, x, y, chart_type, color_scale, h, title)
-    return _draw(fig, key, fit, w, h)
+        if df.empty:
+            return None
+        fig = make_chart(df, x, y, chart_type, color_scale, h, title)
+    return fig
 
 
 # ===========================================================================
