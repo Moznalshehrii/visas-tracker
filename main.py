@@ -38,7 +38,7 @@ def ensure_chrome():
     return True
 
 
-ensure_chrome()
+# Chrome is only needed for the PDF export, so it is fetched on first "Print Summary" (not at startup).
 
 # Containers lack the namespaces Chrome's sandbox needs — disable it.
 try:
@@ -933,7 +933,11 @@ with tabs[0]:
 
     # Print Summary — generates a downloadable PDF
     if st.button("Print Summary", type="primary", width='stretch', key="print_report"):
-        with st.spinner("Generating summary report..."):
+        with st.spinner("Generating summary report (the first time also downloads Chrome for the charts, ~1 min)..."):
+            try:
+                ensure_chrome()
+            except Exception as e:
+                st.warning(f"Chart export engine could not be prepared: {e}")
             # Build summary data for the AI
             total_bv_cost = sum(r["Cost"] for r in bv_exp)
             total_tw_cost = sum(r["Cost"] for r in tw_exp)
