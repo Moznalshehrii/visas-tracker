@@ -632,7 +632,7 @@ _HIDDEN = {}
 
 def _controls(key, default_h):
     default_h = min(max(int(round((default_h or 450) / 50) * 50), 200), 1000)
-    with st.popover("⚙ Chart size", width="content"):
+    with st.popover("⚙ Chart size"):
         fit = st.checkbox("Fit to page width", True, key=f"{key}|fit")
         w = st.slider("Width (px)", 300, 1800, 900, 50, key=f"{key}|w", disabled=fit)
         h = st.slider("Height (px)", 200, 1000, default_h, 50, key=f"{key}|h|{default_h}")
@@ -703,7 +703,11 @@ def _draw(fig, key, fit, w, h):
     def _remember():
         st.session_state[f"{key}|hid"] = list(st.session_state[f"{key}|lg"].get("hidden") or [])
 
-    _legend_component()(key=f"{key}|lg", data=payload, default={"hidden": []}, on_hidden_change=_remember)
+    if hasattr(st.components, "v2"):
+        _legend_component()(key=f"{key}|lg", data=payload, default={"hidden": []}, on_hidden_change=_remember)
+    else:
+        # Older Streamlit: plain chart (legend clicks still work on screen but are not seen by the summary).
+        st.plotly_chart(fig, use_container_width=fit, key=f"{key}|plot")
     return fig
 
 
