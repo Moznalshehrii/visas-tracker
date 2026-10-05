@@ -627,18 +627,27 @@ _chart_n = [0]
 _HIDDEN = {}
 
 
-def _controls(key, default_h, options=None, label="Hide values"):
+def _controls(key, default_h):
     default_h = min(max(int(round((default_h or 450) / 50) * 50), 200), 1000)
-    with st.popover("⚙ Chart settings", width="content"):
+    with st.popover("⚙ Chart size", width="content"):
         fit = st.checkbox("Fit to page width", True, key=f"{key}|fit")
         w = st.slider("Width (px)", 300, 1800, 900, 50, key=f"{key}|w", disabled=fit)
         h = st.slider("Height (px)", 200, 1000, default_h, 50, key=f"{key}|h|{default_h}")
-        hidden = st.multiselect(label, options, key=f"{key}|hide") if options else []
-    return fit, w, h, hidden
+    return fit, w, h
+
+
+def _pick_hidden(key, options, label):
+    """Clickable show/hide pills shown right above the chart. Returns the hidden values."""
+    if not options or len(options) < 2:
+        return []
+    shown = st.pills(label, options, selection_mode="multi", default=options, key=f"{key}|pills")
+    return [o for o in options if o not in (shown or [])]
 
 
 def _draw(fig, key, fit, w, h):
-    fig.update_layout(height=h, width=None if fit else w)
+    # Legend clicks only live in the browser and can't reach the summary, so they are
+    # disabled in favour of the pills above the chart.
+    fig.update_layout(height=h, width=None if fit else w, legend_itemclick=False, legend_itemdoubleclick=False)
     st.plotly_chart(fig, width="stretch" if fit else "content", key=f"{key}|plot")
     return fig
 
@@ -653,7 +662,8 @@ def show_chart(fig):
     title = (fig.layout.title.text or "") if fig.layout.title else ""
     key = _next_key(title)
     names = [t.name for t in fig.data if getattr(t, "name", None)] if len(fig.data) > 1 else []
-    fit, w, h, hidden = _controls(key, fig.layout.height, names, "Hide series")
+    fit, w, h = _controls(key, fig.layout.height)
+    hidden = _pick_hidden(key, names, "Click to show / hide series")
     for t in fig.data:
         if t.name in hidden:
             t.visible = False
@@ -664,7 +674,8 @@ def chart_block(df, x, y, chart_type, color_scale, height, title=""):
     """Build + render a category chart with size controls and a 'hide values' filter."""
     key = _next_key(title)
     options = df[x].dropna().astype(str).value_counts().index.tolist()
-    fit, w, h, hidden = _controls(key, height, options)
+    fit, w, h = _controls(key, height)
+    hidden = _pick_hidden(key, options, "Click to show / hide values")
     _HIDDEN[title] = hidden
     if hidden:
         df = df[~df[x].astype(str).isin(hidden)]
