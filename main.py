@@ -665,7 +665,17 @@ export default function(component) {
   }
   if (traces.length && traces[0].type === 'pie') layout.hiddenlabels = Array.from(hidden);
   if (layout.width) { div.style.width = layout.width + 'px'; } else { div.style.width = '100%'; }
+  layout.autosize = !layout.width;
   window.Plotly.react(div, traces, layout, {responsive: true, displaylogo: false});
+  // Re-fit when the container is resized or only gets its real width after first paint.
+  const refit = () => { if (!layout.width && div.offsetWidth) window.Plotly.Plots.resize(div); };
+  [50, 300, 1000].forEach(ms => setTimeout(refit, ms));
+  if (!div.__ro && window.ResizeObserver) {
+    div.__ro = new ResizeObserver(() => { if (div.__refit) div.__refit(); });
+    div.__ro.observe(parentElement.host ? parentElement.host : (parentElement.parentElement || parentElement));
+    div.__ro.observe(div);
+  }
+  div.__refit = refit;
   if (!div.__bound) {
     div.__bound = true;
     const report = () => {
